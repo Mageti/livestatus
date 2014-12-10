@@ -303,7 +303,7 @@ class BaseConnection:
         if not command.endswith("\n"):
             command += "\n"
         try:
-            self.socket.send("COMMAND " + command + "\n")
+            self.socket.send("COMMAND {}\n".format(command).encode('utf-8'))
         except IOError as e:
             self.socket = None
             if self.persist:
