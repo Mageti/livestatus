@@ -112,7 +112,7 @@ class Helpers:
         """Issues a query that returns one line of data and returns the elements
            of that line as a dictionary from column names to values"""
         r = self.query(query, "ColumnHeaders: on\n")[0:2]
-        return dict(zip(r[0], r[1]))
+        return dict(list(zip(r[0], r[1])))
 
     def query_column(self, query):
         """Issues a query that returns exactly one column and returns the values
@@ -141,7 +141,7 @@ class Helpers:
         headers = response[0]
         result = []
         for line in response[1:]:
-            result.append(dict(zip(headers, line)))
+            result.append(dict(list(zip(headers, line))))
         return result
 
     def query_summed_stats(self, query, add_headers = ""):
@@ -216,7 +216,7 @@ class BaseConnection:
             if self.timeout:
                 self.socket.settimeout(float(self.timeout))
             self.socket.connect(target)
-        except Exception, e:
+        except Exception as e:
             self.socket = None
             raise MKLivestatusSocketError("Cannot connect to '%s': %s" % (self.socketurl, e))
 
@@ -235,7 +235,7 @@ class BaseConnection:
             if len(packet) == 0:
                 raise MKLivestatusSocketClosed("Read zero data from socket, nagios server closed connection")
             size -= len(packet)
-            result += packet
+            result += packet.decode('utf-8')
         return result
 
     def do_query(self, query, add_headers = ""):
@@ -255,8 +255,8 @@ class BaseConnection:
         query += "\n"
 
         try:
-            self.socket.send(query)
-        except IOError, e:
+            self.socket.send(query.encode('utf-8'))
+        except IOError as e:
             if self.persist:
                 del persistent_connections[self.socketurl]
                 self.successful_persistence = False
@@ -291,7 +291,7 @@ class BaseConnection:
             else:
                 raise
 
-        except IOError, e:
+        except IOError as e:
             self.socket = None
             if self.persist:
                 del persistent_connections[self.socketurl]
@@ -304,7 +304,7 @@ class BaseConnection:
             command += "\n"
         try:
             self.socket.send("COMMAND " + command + "\n")
-        except IOError, e:
+        except IOError as e:
             self.socket = None
             if self.persist:
                 del persistent_connections[self.socketurl]
@@ -383,7 +383,7 @@ class MultiSiteConnection(Helpers):
                 connection.connect()
                 self.connections.append((sitename, site, connection))
 
-            except Exception, e:
+            except Exception as e:
                 self.deadsites[sitename] = {
                     "exception" : e,
                     "site"      : site,
@@ -415,7 +415,7 @@ class MultiSiteConnection(Helpers):
         extra_status_sites = {}
         if len(disabled_sites) > 0:
             status_sitenames = set([])
-            for sitename, site in sites.items():
+            for sitename, site in list(sites.items()):
                 try:
                     s, h = site.get("status_host")
                     status_sitenames.add(s)
@@ -431,7 +431,7 @@ class MultiSiteConnection(Helpers):
         # hosts at the same time.
 
         status_hosts = {} # dict from site to list of status_hosts
-        for sitename, site in sites.items() + extra_status_sites.items():
+        for sitename, site in list(sites.items()) + list(extra_status_sites.items()):
             status_host = site.get("status_host")
             if status_host:
                 if type(status_host) != tuple or len(status_host) != 2:
@@ -445,7 +445,7 @@ class MultiSiteConnection(Helpers):
         # Now learn current states of status hosts and store it in a dictionary
         # from (local_site, host) => state
         status_host_states = {}
-        for sitename, hosts in status_hosts.items():
+        for sitename, hosts in list(status_hosts.items()):
             # Fetch all the states of status hosts of this local site in one query
             query = "GET hosts\nColumns: name state has_been_checked last_time_up\n"
             for host in hosts:
@@ -459,20 +459,20 @@ class MultiSiteConnection(Helpers):
                     if has_been_checked == 0:
                         state = 3
                     status_host_states[(sitename, host)] = (state, lastup)
-            except Exception, e:
+            except Exception as e:
                 raise MKLivestatusConfigError(e)
                 status_host_states[(sitename, host)] = (str(e), None)
         self.set_only_sites() # clear site filter
 
         # Disconnect from disabled sites that we connected to only to
         # get status information from
-        for sitename, site in extra_status_sites.items():
+        for sitename, site in list(extra_status_sites.items()):
             disconnect_site(sitename)
 
         # Now loop over all sites having a status_host and take that state
         # of that into consideration
 
-        for sitename, site in sites.items():
+        for sitename, site in list(sites.items()):
             status_host = site.get("status_host")
             if status_host:
                 now = time.time()
@@ -515,7 +515,7 @@ class MultiSiteConnection(Helpers):
         return self.deadsites
 
     def alive_sites(self):
-        return self.connections.keys()
+        return list(self.connections.keys())
 
     def successfully_persisted(self):
         for sitename, site, connection in self.connections:
@@ -557,7 +557,7 @@ class MultiSiteConnection(Helpers):
                     limit -= len(r) # Account for portion of limit used by this site
                 result += r
                 stillalive.append( (sitename, site, connection) )
-            except Exception, e:
+            except Exception as e:
                 self.deadsites[sitename] = {
                     "exception" : e,
                     "site" : site,
@@ -586,7 +586,7 @@ class MultiSiteConnection(Helpers):
         for sitename, site, connection in active_sites:
             try:
                 connection.send_query(query, add_headers + limit_header)
-            except Exception, e:
+            except Exception as e:
                 self.deadsites[sitename] = {
                     "exception" : e,
                     "site" : site,
@@ -606,7 +606,7 @@ class MultiSiteConnection(Helpers):
                 if self.prepend_site:
                     r = [ [sitename] + l for l in r ]
                 result += r
-            except Exception, e:
+            except Exception as e:
                 self.deadsites[sitename] = {
                     "exception" : e,
                     "site" : site,
